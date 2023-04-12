@@ -25,12 +25,25 @@ class Version:
         return str(self.v)
 
 
-@dataclass
+@dataclass(frozen=True)
 class VersionRange:
-    """Closed range of versions"""
+    """Closed non-empty range of versions"""
 
     start: Version
     end: Version
+
+    def __post_init__(self):
+        if self.end < self.start:
+            raise Exception(
+                "End version of VersionRange should be no less than start version"
+            )
+
+    def union(self, other):
+        """Returns union of two intersecting ranges"""
+        if self.end < other.start or other.end < self.start:
+            raise Exception  # TODO: specify
+
+        return VersionRange(min(self.start, other.start), max(self.end, other.end))
 
     def __str__(self):
         if self.start == self.end:
@@ -42,15 +55,73 @@ class VersionRange:
 
 
 class VersionSet:
-    """Set of versions"""
+    """Set of versions
 
-    def __init__(self, ranges=None):
+    VersionSet is stored as an ordered sequence of disjunct version ranges (see VersionRange)
+    """
+
+    # TODO: make ranges sorted and disjunct
+
+    def __init__(self, ranges: list[VersionRange] = None):
         if ranges is None:
             ranges = []
-        self.ranges = ranges
+
+        self.ranges = []
+
+        if not ranges:
+            return
+
+        ranges.sort(key=lambda r: r.start)
+        current = ranges[0]
+        for r in ranges:
+            if current.end < r.start:
+                self.ranges.append(
+                    current
+                )  # note that VersionRange is frozen dataclass
+                current = r
+            else:
+                current = current.union(r)
+        self.ranges.append(current)
 
     def add_range(self, r: VersionRange):
         self.ranges.append(r)
+
+    def union(self, other):
+        # TODO: can be done in linear time, but this is quick enough
+        # TODO: don't forget about this method when implementing unclosed VersionRange
+        return VersionSet(self.ranges + other.ranges)
+
+    def intersection(self, other):
+        ranges = []
+        i, j = 0, 0
+        while i < len(self.ranges) and j < len(other.ranges):
+            left = self.ranges[i]
+            right = other.ranges[j]
+
+            if left.end < right.start:
+                i += 1
+                continue
+            if right.end < left.start:
+                j += 1
+                continue
+
+            # now we know that two ranges intersect
+            if left.end < right.end:
+                ranges.append(VersionRange(max(left.start, right.start), left.end))
+                i += 1
+            else:
+                ranges.append(VersionRange(max(left.start, right.start), right.end))
+                j += 1
+        return VersionSet(ranges)
+
+    def pick(self, versions):  # TODO: add typehint iterable
+        """Pick versions from iterable present in this VersionSet
+
+        Returns:
+            result (iterable)
+        """
+
+        return set(filter(self.__contains__, versions))
 
     def __contains__(self, item: Version):
         for r in self.ranges:
