@@ -33,7 +33,7 @@ def main():
         parser.print_help()
         exit()
 
-    index = load_package_index(args.path)
+    index, dependencies = load_package_index(args.path)
     if args.subcommand == "latest":
         show_latest_version(index, args.package)
 

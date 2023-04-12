@@ -35,7 +35,7 @@ class VersionRange:
     def __post_init__(self):
         if self.end < self.start:
             raise Exception(
-                "End version of VersionRange should be no less than start version"
+                "End version of VersionRange should be at least start version"
             )
 
     def union(self, other):
@@ -43,7 +43,9 @@ class VersionRange:
         if self.end < other.start or other.end < self.start:
             raise Exception  # TODO: specify
 
-        return VersionRange(min(self.start, other.start), max(self.end, other.end))
+        return VersionRange(
+            min(self.start, other.start), max(self.end, other.end)
+        )
 
     def __str__(self):
         if self.start == self.end:
@@ -57,7 +59,9 @@ class VersionRange:
 class VersionSet:
     """Set of versions
 
-    VersionSet is stored as an ordered sequence of disjunct version ranges (see VersionRange)
+    VersionSet is stored as an ordered sequence of disjunct version ranges
+    (see VersionRange). Note: while Version and VersionRange are
+    immutable, VersionSet is not.
     """
 
     # TODO: make ranges sorted and disjunct
@@ -107,10 +111,14 @@ class VersionSet:
 
             # now we know that two ranges intersect
             if left.end < right.end:
-                ranges.append(VersionRange(max(left.start, right.start), left.end))
+                ranges.append(
+                    VersionRange(max(left.start, right.start), left.end)
+                )
                 i += 1
             else:
-                ranges.append(VersionRange(max(left.start, right.start), right.end))
+                ranges.append(
+                    VersionRange(max(left.start, right.start), right.end)
+                )
                 j += 1
         return VersionSet(ranges)
 
@@ -147,6 +155,8 @@ def parse_version(s):
 
     Syntax:
         '<n>' where n is version number (integer)
+    Returns:
+        version (Version)
     """
     return Version(int(s))
 
@@ -157,6 +167,8 @@ def parse_range(s):
     Syntax:
         '<n>' for a range consisting of a single version
         '<m>..<n>' for a range consisting of versions m<=k<=n
+    Returns:
+        version_range (VersionRange)
     """
     if ".." in s:
         start_, end_ = s.split("..")
@@ -171,6 +183,8 @@ def parse_package_version(s):
 
     Syntax:
         '<package_name> <version>'
+    Returns:
+        versioned_package (VersionedPackage)
     """
     name, version = s.strip().split()
     return VersionedPackage(name, parse_version(version))
@@ -181,6 +195,8 @@ def parse_dependency(s):
 
     Syntax:
         '<package_name> <version_range>'
+    Returns:
+        name (str), range (VersionRange)
     """
     name, range_ = s.split()
     return name, parse_range(range_)
@@ -191,6 +207,8 @@ def parse_dependencies(s):
 
     Syntax:
         '<dependency>, ..., <dependency>'
+    Returns:
+        dependencies (List[Tuple[str, VersionRange]])
     """
     deps = s.strip().split(",")
     if deps == [""]:  # no dependencies
@@ -204,6 +222,8 @@ def parse_entry(entry):
 
     Syntax:
         '<package_name> <version>: <dependency>, ..., <dependency>'
+    Returns:
+        result (Tuple[VersionedPackage], List[Tuple[str, VersionRange]])
     """
     package, dependencies = entry.strip().split(":")
 
@@ -214,17 +234,41 @@ def parse_entry(entry):
 def load_package_index(path):
     """Load package index from disk
 
-    Returns
-        index -- nested dictionary.
-            First level:  key is package name PACKAGE, value is dictionary indexed by versions
-            Second level: key is version VERSION, value is dictionary indexed by package names
-            Third level:  key is package name DEP, value is VersionSet of versions, which
-                suit dependency DEP for version VERSION of package PACKAGE
+    Arguments:
+        path: path to index file
+
+    Returns: (index, dependencies)
+        index (dict[str, set[Version]]): index of versions of packages, where
+            key is package name and  value is version number.
+        dependencies (dict[VersionedPackage, dict[str, VersionSet]]): dict,
+            where keys are versioned packages and values are mappings from
+            package names  this version depend on to set of possible versions
+            for this dependency.
     """
-    index = defaultdict(lambda: defaultdict(lambda: defaultdict(VersionSet)))
+    index = {}
+    dependencies = {}
     with open(path, "r") as file:
         for line in file:
-            pv, deps = parse_entry(line)
-            for dep, rang in deps:
-                index[pv.name][pv.version][dep].add_range(rang)
-    return index
+            pv, raw_deps = parse_entry(line)
+
+            # Adding index entry
+            if pv.name not in index.keys():
+                index[pv.name] = set()
+            if pv.version in index[pv.name]:
+                # Different lines specify dependencies of same version
+                raise Exception(
+                    f"{pv.name} {pv.version} dependencies are specified twice"
+                )
+            index[pv.name].add(pv.version)
+
+            # Adding dependencies entries
+            deps = {}
+            for name, vr in deps:
+                if name in deps.keys():
+                    # IMPORTANT: if there are several dependencies on some package,
+                    #   it is interpreted as all of them should be satisfied
+                    deps[name] = deps.name.intersection(VersionSet([vr]))
+                else:
+                    deps[name] = VersionSet([vr])
+            dependencies[pv] = deps
+    return index, dependencies
