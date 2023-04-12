@@ -21,6 +21,9 @@ class Version:
     def __eq__(self, other):
         return self.v == other.v
 
+    def __str__(self):
+        return str(self.v)
+
 
 @dataclass
 class VersionRange:
