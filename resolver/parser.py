@@ -260,11 +260,11 @@ def load_package_index(path):
 
             # Adding dependencies entries
             deps = {}
-            for name, vr in deps:
+            for name, vr in raw_deps:
                 if name in deps.keys():
                     # IMPORTANT: if there are several dependencies on some package,
                     #   it is interpreted as all of them should be satisfied
-                    deps[name] = deps.name.intersection(VersionSet([vr]))
+                    deps[name] = deps[name].intersection(VersionSet([vr]))
                 else:
                     deps[name] = VersionSet([vr])
             dependencies[pv] = deps

@@ -128,3 +128,26 @@ def reduce_setup(dependencies, setup: dict[str, Version], keep: Iterable[str]):
                 new_setup_packages.add(requirement)
                 queue.append(requirement)
     return {package: setup[package] for package in new_setup_packages}
+
+
+def satisfy(index, dependencies, package: str, version: str):
+    version = Version(int(version))
+    if package not in index:
+        raise UnknownPackageError(f"There is no package named {package}")
+    if version not in index[package]:
+        raise UnknownVersionError(
+            f"There is no version {str(version)} of {package}"
+        )
+    vp = VersionedPackage(package, version)
+
+    formula = Formula.from_dependencies(index, dependencies)
+
+    is_satisfiable, setup = formula.solve(assumptions=[vp])
+    if not is_satisfiable:
+        print("This package version can't be satisfied")
+        return
+
+    # setup = reduce_setup(dependencies, setup, [vp.name])
+    print("This package can be satisfied with following packages:")
+    for package, version in setup.items():
+        print(f"{package} {str(version)}")
