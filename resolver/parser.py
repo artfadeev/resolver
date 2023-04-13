@@ -87,9 +87,6 @@ class VersionSet:
                 current = current.union(r)
         self.ranges.append(current)
 
-    def add_range(self, r: VersionRange):
-        self.ranges.append(r)
-
     def union(self, other):
         # TODO: can be done in linear time, but this is quick enough
         # TODO: don't forget about this method when implementing unclosed VersionRange
