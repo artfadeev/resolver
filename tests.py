@@ -5,7 +5,7 @@ from resolver.parser import (
     VersionRange,
     Version,
 )
-from resolver.utils import Formula, Solver
+from resolver.utils import Formula, Solver, reduce_setup
 from sys import argv
 
 INDEX_PATH = argv[1] if len(argv) >= 2 else "./packageIndex.txt"
@@ -80,9 +80,26 @@ def test_Formula():
     )
     assert satisfiable == set(map(f.vp_to_var.__getitem__, SATISFIABLE))
 
-    print("test_Formula has passed tests!")
+    print("test_Formula passed tests!")
+
+
+def test_reduce_setup():
+    f = Formula.from_dependencies(INDEX_TEST_CASE, DEPS_TEST_CASE)
+
+    test_cases = [
+        (vp("a", 1), {"a": v(1)}),
+        (vp("b", 2), {"b": v(2), "c": v(3)}),
+        (vp("c", 3), {"c": v(3)}),
+    ]
+    for vp_, minimal_setup in test_cases:
+        is_sat, setup = f.solve(assumptions=[vp_])
+        assert is_sat
+        assert reduce_setup(DEPS_TEST_CASE, setup, [vp_.name]) == minimal_setup
+
+    print("test_reduce_setup passed tests!")
 
 
 if __name__ == "__main__":
     test_check_setup()
     test_Formula()
+    test_reduce_setup()

@@ -1,4 +1,6 @@
 from itertools import combinations
+from collections.abc import Iterable
+from collections import deque
 
 from pysat.formula import CNF
 from pysat.solvers import Solver
@@ -37,6 +39,28 @@ class Formula:
     def _name(self, vars):
         """Decode VersionedPackages from corresponding variable numbers"""
         return list(map(self.var_to_vp.__getitem__, vars))
+
+    def solve(self, assumptions: list[VersionedPackage] | None = None):
+        """Find solution to the formula where variables for `assumptions` are true
+
+        Note that returned setup is not guaranteed to be minimal. Use reduce_setup
+        if you want to reduce it.
+
+        Returns: (is_satisfiable, setup)
+            is_satisfiable (bool)
+            setup (dict[str, Version]|None): setup or None if is_satisfiable==False
+        """
+        if assumptions is None:
+            assumptions = []
+        assumptions_vars = list(map(self.vp_to_var.__getitem__, assumptions))
+
+        with Solver(bootstrap_with=self.formula) as solver:
+            if not solver.solve(assumptions=assumptions_vars):
+                return False, None
+            vps = [self.var_to_vp[v] for v in solver.get_model() if v > 0]
+
+        setup = {vp.name: vp.version for vp in vps}
+        return True, setup
 
     @classmethod
     def from_dependencies(cls, index, dependencies):
@@ -77,3 +101,30 @@ class Formula:
 
         formula = CNF(from_clauses=clauses)
         return cls(formula, bijection)
+
+
+def reduce_setup(dependencies, setup: dict[str, Version], keep: Iterable[str]):
+    """Reduce setup by removing everything except `keep` and its dependencies
+
+    Arguments:
+        dependencies (dict[VersionedPackage, dict[str, VersionSet]])
+        setup (dict[str, Version]): setup to be reduced
+        keep (Iterable[str]): package names to be kept
+
+    Returns:
+        new_setup (dict[str, Version])
+    """
+    if not set(keep).issubset(setup.keys()):
+        raise Exception("All packages from `keep` should be in the setup!")
+
+    new_setup_packages = set(keep)
+    queue = deque(keep)
+
+    while queue:
+        package = queue.popleft()
+        version = setup[package]
+        for requirement in dependencies[VersionedPackage(package, version)]:
+            if requirement not in new_setup_packages:
+                new_setup_packages.add(requirement)
+                queue.append(requirement)
+    return {package: setup[package] for package in new_setup_packages}
