@@ -26,6 +26,12 @@ def main():
         required=True,
         help="path to package index",
     )
+    parser.add_argument(
+        "--mode",
+        dest="mode",
+        default="intersection",
+        help='mode of handling multiple dependencies of a versioned package on a single package. Can be either "intersection" or "union".',
+    )
 
     subcommand_latest = subparsers.add_parser(
         "latest", help="show latest version of package"
@@ -43,7 +49,7 @@ def main():
         parser.print_help()
         exit()
 
-    index, dependencies = load_package_index(args.path)
+    index, dependencies = load_package_index(args.path, mode=args.mode)
     if args.subcommand == "latest":
         show_latest_version(index, args.package)
     elif args.subcommand == "satisfy":

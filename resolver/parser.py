@@ -228,11 +228,20 @@ def parse_entry(entry):
 
 
 # PART 3: actual logic of parser
-def load_package_index(path):
+def load_package_index(path, mode="intersection"):
     """Load package index from disk
 
     Arguments:
         path: path to index file
+        mode (optional): defines handling of multiple dependencies between a
+            versioned packages on
+        mode (optional): defines handling of several dependencies of some
+            versioned package on single package. Can be either "intersection"
+            or "union". In "intersection" mode, if index files lists ranges
+            R_1, ..., R_N as dependency of versioned package of A on B, then
+            version of B in setup should be in ALL of those ranges. In
+            "union" mode, in the same situation, version of B in setup
+            should be in one of them.
 
     Returns: (index, dependencies)
         index (dict[str, set[Version]]): index of versions of packages, where
@@ -242,6 +251,15 @@ def load_package_index(path):
             package names  this version depend on to set of possible versions
             for this dependency.
     """
+    multiple_ranges_handler = {
+        "intersection": lambda vs, new_range: vs.intersection(
+            VersionSet([new_range])
+        ),
+        "union": lambda vs, new_range: vs.union(VersionSet([new_range])),
+    }[
+        mode
+    ]  # TODO: Add handling of invalid modes?
+
     index = {}
     dependencies = {}
     with open(path, "r") as file:
@@ -262,9 +280,7 @@ def load_package_index(path):
             deps = {}
             for name, vr in raw_deps:
                 if name in deps.keys():
-                    # IMPORTANT: if there are several dependencies on some package,
-                    #   it is interpreted as all of them should be satisfied
-                    deps[name] = deps[name].intersection(VersionSet([vr]))
+                    deps[name] = multiple_ranges_handler(deps[name], vr)
                 else:
                     deps[name] = VersionSet([vr])
             dependencies[pv] = deps

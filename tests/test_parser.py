@@ -102,7 +102,7 @@ def test_parser():
     print("test_parser success!")
 
 
-if __name__ == "__main__":
+def run():
     test_types()
     test_VersionSet()
     test_parser()

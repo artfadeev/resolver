@@ -99,7 +99,7 @@ def test_reduce_setup():
     print("test_reduce_setup passed tests!")
 
 
-if __name__ == "__main__":
+def run():
     test_check_setup()
     test_Formula()
     test_reduce_setup()
