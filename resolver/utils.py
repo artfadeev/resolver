@@ -5,7 +5,7 @@ from collections import deque
 from pysat.formula import CNF
 from pysat.solvers import Solver
 
-from .parser import parse_version, Version, VersionedPackage
+from .parser import parse_version, Version, VersionedPackage, VersionSet
 
 
 class UnknownPackageError(Exception):
@@ -61,6 +61,14 @@ class Formula:
 
         setup = {vp.name: vp.version for vp in vps}
         return True, setup
+
+    def any_satisfiable(self, packages: Iterable[VersionedPackage]):
+        """Test whether at least one from packages can be satisfied"""
+        new_formula = self.formula.clauses + [
+            self.vp_to_var[vp] for vp in packages
+        ]
+        with Solver(bootstrap_with=new_formula) as solver:
+            return solver.solve()
 
     @classmethod
     def from_dependencies(cls, index, dependencies):
@@ -130,6 +138,16 @@ def reduce_setup(dependencies, setup: dict[str, Version], keep: Iterable[str]):
     return {package: setup[package] for package in new_setup_packages}
 
 
+def is_versionset_satisfiable(
+    index, formula: Formula, package: str, vs: VersionSet
+):
+    """Check if there is solution of formula where `package` has version from vs"""
+    versions = vs.pick(index[package])
+    vps = [VersionedPackage(package, v) for v in versions]
+
+    return formula.any_satisfiable(vps)
+
+
 def satisfy(index, dependencies, package: str, version: str, oneline=False):
     version = Version(int(version))
     if package not in index:
@@ -145,6 +163,15 @@ def satisfy(index, dependencies, package: str, version: str, oneline=False):
     is_satisfiable, setup = formula.solve(assumptions=[vp])
     if not is_satisfiable:
         print("This package version can't be satisfied")
+
+        """
+        # We'll try to explain why:
+        # Check if for some dependency, none of versions in the
+        # corresponding versionset is satisfiable
+        for dep, vs in dependencies[vp].items():
+            if not is_versionset_satisfiable(index, formula, dep, vs):
+                print(f"None of versions {str(vs)} of dependency package {dep} is satisfiable!")
+        """
         return
 
     if oneline:
