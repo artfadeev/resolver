@@ -43,6 +43,12 @@ def main():
     )
     subcommand_satisfy.add_argument("package", help="package name")
     subcommand_satisfy.add_argument("version", help="package version")
+    subcommand_satisfy.add_argument(
+        "--oneline",
+        dest="oneline",
+        action="store_true",
+        help="print result as single line of comma-delimited list of versioned packages",
+    )
 
     args = parser.parse_args()
     if args.subcommand is None:
@@ -53,7 +59,13 @@ def main():
     if args.subcommand == "latest":
         show_latest_version(index, args.package)
     elif args.subcommand == "satisfy":
-        satisfy(index, dependencies, args.package, args.version)
+        satisfy(
+            index,
+            dependencies,
+            args.package,
+            args.version,
+            oneline=args.oneline,
+        )
 
 
 if __name__ == "__main__":

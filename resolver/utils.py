@@ -130,7 +130,7 @@ def reduce_setup(dependencies, setup: dict[str, Version], keep: Iterable[str]):
     return {package: setup[package] for package in new_setup_packages}
 
 
-def satisfy(index, dependencies, package: str, version: str):
+def satisfy(index, dependencies, package: str, version: str, oneline=False):
     version = Version(int(version))
     if package not in index:
         raise UnknownPackageError(f"There is no package named {package}")
@@ -147,7 +147,36 @@ def satisfy(index, dependencies, package: str, version: str):
         print("This package version can't be satisfied")
         return
 
-    # setup = reduce_setup(dependencies, setup, [vp.name])
-    print("This package can be satisfied with following packages:")
-    for package, version in setup.items():
-        print(f"{package} {str(version)}")
+    if oneline:
+        setup = reduce_setup(dependencies, setup, [vp.name])
+        print(", ".join(f"{name} {v}" for name, v in setup.items()))
+    else:
+        print("This package can be satisfied with following packages:")
+        print_transitive_dependencies(index, dependencies, setup, package)
+
+
+def print_transitive_dependencies(
+    index, dependencies, setup: dict[str, Version], root_package: str
+):
+    """Pretty-print to stdout root_package and all of its dependencies"""
+    printed = set()
+
+    def pp(package: str, level: int, prefix="  "):
+        vp = VersionedPackage(package, setup[package])
+        # dependencies do not necessarily form a tree, so cycles and
+        # repeated subtrees should be prevented from printing
+        if package in printed:
+            print(f"{prefix*level}{package} {vp.version} (see above)")
+            return
+
+        printed.add(package)
+
+        has_subdependencies = (
+            " with following dependencies:" if dependencies[vp] else ""
+        )
+
+        print(f"{prefix*level}{package} {vp.version}{has_subdependencies}")
+        for dep in dependencies[vp]:
+            pp(dep, level + 1, prefix)
+
+    pp(root_package, 0)
